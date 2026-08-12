@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-//go:embed all:fix-crashloop
+//go:embed all:fix-crashloop all:fix-rbac all:pending-scheduling
 var content embed.FS
 
 // Has reports whether name is a built-in challenge.

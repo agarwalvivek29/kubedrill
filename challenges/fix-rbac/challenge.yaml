@@ -1,0 +1,49 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-rbac
+  version: "1.0.0"
+  title: "RBAC: the deployer can't deploy"
+  description: |
+    The `deployer` Role in namespace `team` lost the permission it needs to
+    manage Deployments. Restore the Role so it can create/get/list
+    deployments (apps API group). Do not touch other rules.
+  difficulty: medium
+  topics: [rbac, security]
+  exam: [cka, cks]
+  timeLimit: 15m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  setup:
+    manifests:
+      - path: setup/01-rbac.yaml
+    faults:
+      - name: strip-deployment-rule
+        patch:
+          target: { kind: Role, name: deployer, namespace: team, apiVersion: rbac.authorization.k8s.io/v1 }
+          type: json
+          data:
+            - op: replace
+              path: /rules
+              value:
+                - apiGroups: [""]
+                  resources: ["pods"]
+                  verbs: ["get", "list", "watch"]
+    readiness:
+      - cel: "!object.rules.exists(r, 'deployments' in r.resources && 'create' in r.verbs)"
+        target: { kind: Role, name: deployer, namespace: team, apiVersion: rbac.authorization.k8s.io/v1 }
+        poll: { timeout: 30s }
+objectives:
+  - id: role-can-deploy
+    title: "deployer Role can create Deployments"
+    points: 100
+    checks:
+      - cel: "object.rules.exists(r, 'deployments' in r.resources && 'create' in r.verbs)"
+        target: { kind: Role, name: deployer, namespace: team, apiVersion: rbac.authorization.k8s.io/v1 }
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n team get role deployer -o yaml — compare its rules to what a deployer needs." }
+  - { id: h2, penalty: 20, text: "Add a rule for apiGroups [apps], resources [deployments], verbs incl. create." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

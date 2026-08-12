@@ -159,7 +159,7 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 		return nil, false, err
 	}
 
-	card := verify.Evaluate(ctx, c, loaded.Challenge)
+	card := verify.Evaluate(ctx, &verify.Evaluator{Client: c, Dir: st.ChallengeDir}, loaded.Challenge)
 
 	late := st.Deadline != nil && time.Now().After(*st.Deadline)
 	// Persist the attempt; bestScore is monotone.

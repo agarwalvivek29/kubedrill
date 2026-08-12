@@ -41,7 +41,7 @@ func Apply(ctx context.Context, c *kube.Client, dir string, ch *v1alpha1.Challen
 			return fmt.Errorf("fault %q: %w", f.Name, err)
 		}
 	}
-	if err := waitReadiness(ctx, c, ch); err != nil {
+	if err := waitReadiness(ctx, c, dir, ch); err != nil {
 		return err
 	}
 	return nil
@@ -120,11 +120,12 @@ func injectFault(ctx context.Context, c *kube.Client, f v1alpha1.Fault) error {
 
 // waitReadiness polls the readiness gates until all pass or the deadline hits,
 // so the timer never starts on a not-yet-broken environment.
-func waitReadiness(ctx context.Context, c *kube.Client, ch *v1alpha1.Challenge) error {
+func waitReadiness(ctx context.Context, c *kube.Client, dir string, ch *v1alpha1.Challenge) error {
 	gates := ch.Environment.Setup.Readiness
 	if len(gates) == 0 {
 		return nil
 	}
+	ev := &verify.Evaluator{Client: c, Dir: dir}
 	deadline := time.Now().Add(90 * time.Second)
 	for _, g := range gates {
 		to := 60 * time.Second
@@ -138,7 +139,7 @@ func waitReadiness(ctx context.Context, c *kube.Client, ch *v1alpha1.Challenge) 
 			gateDeadline = deadline
 		}
 		for {
-			r := verify.EvalCheck(ctx, c, g)
+			r := ev.Check(ctx, g)
 			if r.Outcome == verify.Pass {
 				break
 			}

@@ -16,10 +16,9 @@ import (
 
 // evalCEL evaluates a CEL check against the live cluster. It binds `object`
 // (single target) or `objects` (targets list). The v1alpha1 helpers snapshot()
-// and restarts0() are declared for compile-compatibility; delta assertions
-// that call them are supported once baselines are wired (Story 1.11/verify
-// hardening) — for now a program that invokes them errors rather than lying.
-func evalCEL(ctx context.Context, c *kube.Client, ch v1alpha1.Check) CheckResult {
+// and restarts0() are declared for compile-compatibility; programs that invoke
+// them error rather than silently mislead until baselines are wired.
+func (e *Evaluator) evalCEL(ctx context.Context, ch v1alpha1.Check) CheckResult {
 	env, err := celProgramEnv()
 	if err != nil {
 		return CheckResult{Errored, err.Error()}
@@ -36,14 +35,14 @@ func evalCEL(ctx context.Context, c *kube.Client, ch v1alpha1.Check) CheckResult
 	vars := map[string]any{}
 	switch {
 	case ch.Target != nil:
-		obj, res := getTarget(ctx, c, *ch.Target)
+		obj, res := e.getTarget(ctx, *ch.Target)
 		if res != nil {
 			return *res
 		}
 		vars["object"] = obj.Object
 		vars["objects"] = []any{}
 	case ch.Targets != nil:
-		list, res := listTargets(ctx, c, ch.Targets)
+		list, res := e.listTargets(ctx, ch.Targets)
 		if res != nil {
 			return *res
 		}
@@ -84,7 +83,9 @@ func celProgramEnv() (*cel.Env, error) {
 	)
 }
 
-func listTargets(ctx context.Context, c *kube.Client, t *v1alpha1.Targets) ([]any, *CheckResult) {
+// listTargets lists objects for a targets selector, EXCLUDING probe artifacts
+// (AD-10) so a probe pod can never be swept into a check.
+func (e *Evaluator) listTargets(ctx context.Context, t *v1alpha1.Targets) ([]any, *CheckResult) {
 	apiVersion := t.APIVersion
 	if apiVersion == "" {
 		apiVersion = kube.DefaultAPIVersion(t.Kind)
@@ -92,7 +93,7 @@ func listTargets(ctx context.Context, c *kube.Client, t *v1alpha1.Targets) ([]an
 	if apiVersion == "" {
 		return nil, &CheckResult{Errored, fmt.Sprintf("cannot resolve apiVersion for kind %q", t.Kind)}
 	}
-	ri, err := c.ResourceFor(apiVersion, t.Kind, t.Namespace)
+	ri, err := e.Client.ResourceFor(apiVersion, t.Kind, t.Namespace)
 	if err != nil {
 		return nil, &CheckResult{Errored, err.Error()}
 	}
@@ -102,6 +103,9 @@ func listTargets(ctx context.Context, c *kube.Client, t *v1alpha1.Targets) ([]an
 	}
 	out := make([]any, 0, len(ul.Items))
 	for i := range ul.Items {
+		if isProbeObject(ul.Items[i].Object) {
+			continue
+		}
 		out = append(out, ul.Items[i].Object)
 	}
 	return out, nil

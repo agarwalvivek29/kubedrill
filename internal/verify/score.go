@@ -4,7 +4,6 @@ import (
 	"context"
 
 	v1alpha1 "github.com/agarwalvivek29/kubedrill/apis/challenge/v1alpha1"
-	"github.com/agarwalvivek29/kubedrill/internal/kube"
 )
 
 // ObjectiveResult is one objective's evaluated state.
@@ -33,7 +32,7 @@ type Scorecard struct {
 //
 // Note: hint/rule penalties are layered by the engine; this computes the
 // positive objective score and per-objective outcomes.
-func Evaluate(ctx context.Context, c *kube.Client, ch *v1alpha1.Challenge) Scorecard {
+func Evaluate(ctx context.Context, e *Evaluator, ch *v1alpha1.Challenge) Scorecard {
 	passed := map[string]bool{}
 	var card Scorecard
 
@@ -47,7 +46,7 @@ func Evaluate(ctx context.Context, c *kube.Client, ch *v1alpha1.Challenge) Score
 			continue
 		}
 
-		ok, errored, reason := evalObjective(ctx, c, obj)
+		ok, errored, reason := evalObjective(ctx, e, obj)
 		res.Passed = ok
 		res.Errored = errored
 		res.Reason = reason
@@ -71,9 +70,9 @@ func dependenciesMet(obj v1alpha1.Objective, passed map[string]bool) bool {
 }
 
 // evalObjective evaluates all checks (AND). Returns passed, errored, reason.
-func evalObjective(ctx context.Context, c *kube.Client, obj v1alpha1.Objective) (bool, bool, string) {
+func evalObjective(ctx context.Context, e *Evaluator, obj v1alpha1.Objective) (bool, bool, string) {
 	for _, ch := range obj.Checks {
-		r := EvalCheck(ctx, c, ch)
+		r := e.Check(ctx, ch)
 		switch r.Outcome {
 		case Errored:
 			return false, true, r.Reason

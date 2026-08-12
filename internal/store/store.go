@@ -248,16 +248,20 @@ func (s *Store) SetCurrent(id string) error {
 	return nil
 }
 
-// ActiveCount returns how many sessions are in a live phase (creating/running).
-// Used to warn about resource pressure before starting another (NFR-4).
-func (s *Store) ActiveCount() int {
+// LiveCount returns how many sessions still own a running cluster — every
+// phase except "stopped". This is the resource-pressure signal (NFR-4): a
+// *verified* or *failed* session's kind cluster keeps running (and consuming
+// ~2 GB) until `stop` tears it down, so it must count toward the warning just
+// as much as a running one. Counting only creating/running would undercount
+// live clusters and let a user pile them up until the Docker VM OOMs.
+func (s *Store) LiveCount() int {
 	states, err := s.List()
 	if err != nil {
 		return 0
 	}
 	n := 0
 	for _, st := range states {
-		if st.Phase == api.PhaseCreating || st.Phase == api.PhaseRunning {
+		if st.Phase != api.PhaseStopped {
 			n++
 		}
 	}

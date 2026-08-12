@@ -52,8 +52,8 @@ func newStartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if active := s.ActiveCount(); active >= resourcePressureThreshold && !force {
-				return fmt.Errorf("%d active sessions already (each ~2 GB RAM); re-run with --force to start another", active)
+			if live := s.LiveCount(); live >= resourcePressureThreshold && !force {
+				return fmt.Errorf("%d sessions already have running clusters (each ~2 GB RAM); stop one, or re-run with --force", live)
 			}
 			dir, err := resolveChallengeDir(args[0])
 			if err != nil {

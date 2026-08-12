@@ -132,12 +132,17 @@ func TestCurrentPointer(t *testing.T) {
 	}
 }
 
-func TestActiveCount(t *testing.T) {
+func TestLiveCountExcludesOnlyStopped(t *testing.T) {
 	s := New(t.TempDir())
-	newSession(t, s, "a") // running
-	newSession(t, s, "b") // running
-	_ = s.Update("b", func(st *api.State) error { st.Phase = api.PhaseStopped; return nil })
-	if got := s.ActiveCount(); got != 1 {
-		t.Fatalf("ActiveCount = %d, want 1 (one running, one stopped)", got)
+	newSession(t, s, "run")      // running  → live
+	newSession(t, s, "verified") // verified → cluster still up → live
+	newSession(t, s, "stopped")  // stopped  → cluster gone → not live
+	_ = s.Update("verified", func(st *api.State) error { st.Phase = api.PhaseVerified; return nil })
+	_ = s.Update("stopped", func(st *api.State) error { st.Phase = api.PhaseStopped; return nil })
+
+	// The bug this guards against: a passed (verified) session's cluster keeps
+	// running and consuming RAM, so it MUST count toward resource pressure.
+	if got := s.LiveCount(); got != 2 {
+		t.Fatalf("LiveCount = %d, want 2 (running + verified are live; stopped is not)", got)
 	}
 }

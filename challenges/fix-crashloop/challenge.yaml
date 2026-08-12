@@ -2,20 +2,21 @@ apiVersion: kubedrill.dev/v1alpha1
 kind: Challenge
 metadata:
   name: fix-crashloop
-  version: "1.0.0"
+  version: "1.1.0"
   title: "Broken Deployment: CrashLoopBackOff"
   description: |
     The `webshop` deployment in namespace `retail` is crashlooping.
-    Diagnose why the container won't stay up and restore the deployment
-    to 3 available replicas. Do not delete and recreate the deployment.
+    Diagnose why the container won't stay up, restore it to 3 available
+    replicas, and get the Service serving traffic. Do not delete and
+    recreate the deployment.
   difficulty: medium
-  topics: [workloads, troubleshooting]
+  topics: [workloads, troubleshooting, services]
   exam: [cka, ckad]
   timeLimit: 15m
 environment:
   cluster:
     kubernetesVersion: "1.31"
-  images: [nginx:1.27-alpine]
+  images: [nginx:1.27-alpine, busybox:1.36]
   setup:
     manifests:
       - path: setup/01-app.yaml
@@ -38,13 +39,23 @@ environment:
 objectives:
   - id: deployment-available
     title: "webshop has 3 available replicas"
-    points: 100
+    points: 50
     checks:
       - match:
           target: { kind: Deployment, name: webshop, namespace: retail, apiVersion: apps/v1 }
           object:
             status:
               availableReplicas: 3
+  - id: service-serves
+    title: "the webshop Service serves HTTP"
+    points: 50
+    dependsOn: [deployment-available]
+    checks:
+      - probe:
+          image: busybox:1.36
+          script: probes/http-check.sh
+          namespace: retail
+          timeout: 30s
 hints:
   - { id: h1, penalty: 10, text: "kubectl -n retail describe pod — look at the container's command and last state." }
   - { id: h2, penalty: 20, text: "The container command was overridden to exit immediately. Remove it so the image's default entrypoint runs." }

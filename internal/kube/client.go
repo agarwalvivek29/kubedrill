@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/discovery"
 	memory "k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -19,6 +20,7 @@ import (
 // Client bundles the handles the engine needs to read and apply objects.
 type Client struct {
 	Dyn    dynamic.Interface
+	Typed  kubernetes.Interface
 	Mapper meta.RESTMapper
 }
 
@@ -32,12 +34,16 @@ func FromKubeconfig(kubeconfig []byte) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kube: dynamic client: %w", err)
 	}
+	typed, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("kube: typed client: %w", err)
+	}
 	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("kube: discovery client: %w", err)
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(disc))
-	return &Client{Dyn: dyn, Mapper: mapper}, nil
+	return &Client{Dyn: dyn, Typed: typed, Mapper: mapper}, nil
 }
 
 // ResourceFor resolves an apiVersion+kind to a namespaced/cluster-scoped

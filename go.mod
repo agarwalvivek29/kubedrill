@@ -3,6 +3,7 @@ module github.com/agarwalvivek29/kubedrill
 go 1.26.0
 
 require (
+	github.com/gofrs/flock v0.13.0
 	github.com/google/cel-go v0.31.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/spf13/cobra v1.10.2

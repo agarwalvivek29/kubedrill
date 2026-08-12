@@ -22,6 +22,7 @@ func newRootCmd() *cobra.Command {
 	}
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newAuthorCmd())
+	root.AddCommand(newImagesCmd())
 	return root
 }
 

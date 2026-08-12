@@ -10,8 +10,9 @@ import (
 )
 
 // newAuthorCmd is the parent for the authoring toolchain. `schema --print`
-// landed in Story 1.2 (it emits the frozen contract, FR-13) and `new` scaffolds
-// a challenge (Story 2.1); validate/lint/test arrive in later Epic 2 stories.
+// landed in Story 1.2 (it emits the frozen contract, FR-13), `new` scaffolds a
+// challenge (Story 2.1) and `validate` checks one without a cluster (Story 2.2);
+// lint/test arrive in later Epic 2 stories.
 func newAuthorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "author",
@@ -19,6 +20,7 @@ func newAuthorCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newAuthorSchemaCmd())
 	cmd.AddCommand(newAuthorNewCmd())
+	cmd.AddCommand(newAuthorValidateCmd())
 	return cmd
 }
 
@@ -41,7 +43,7 @@ func newAuthorNewCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			fmt.Fprintf(out, "Scaffolded challenge %q at %s\n", args[0], created)
-			fmt.Fprintf(out, "Next: edit challenge.yaml and solution/solve.sh, then run `kubedrill author schema --print` for the full contract.\n")
+			fmt.Fprintf(out, "Next: edit challenge.yaml and solution/solve.sh, then run `kubedrill author validate %s`.\n", created)
 			return nil
 		},
 	}

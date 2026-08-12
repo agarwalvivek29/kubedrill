@@ -141,7 +141,12 @@ func printScorecard(cmd *cobra.Command, card *verify.Scorecard, late bool) {
 		}
 		fmt.Fprintln(out, line)
 	}
-	fmt.Fprintf(out, "\nScore: %d/%d", card.Score, card.MaxScore)
+	if card.HintPenalty > 0 {
+		fmt.Fprintf(out, "\nObjectives: %d/%d   Hint penalty: −%d", card.Score, card.MaxScore, card.HintPenalty)
+		fmt.Fprintf(out, "\nScore: %d/%d", card.NetScore(), card.MaxScore)
+	} else {
+		fmt.Fprintf(out, "\nScore: %d/%d", card.NetScore(), card.MaxScore)
+	}
 	if late {
 		fmt.Fprint(out, "  (late — past the deadline; recorded score unaffected)")
 	}
@@ -181,6 +186,9 @@ func newStatusCmd() *cobra.Command {
 				} else {
 					fmt.Fprintf(out, "Time left: %s\n", rem)
 				}
+			}
+			if len(st.HintsUsed) > 0 {
+				fmt.Fprintf(out, "Hints used: %d (%v)\n", len(st.HintsUsed), st.HintsUsed)
 			}
 			if n := len(st.Attempts); n > 0 {
 				fmt.Fprintf(out, "Attempts:  %d (last score %d)\n", n, st.Attempts[n-1].Score)

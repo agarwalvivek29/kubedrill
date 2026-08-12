@@ -16,12 +16,25 @@ type ObjectiveResult struct {
 	Reason   string
 }
 
-// Scorecard is the outcome of verifying a challenge.
+// Scorecard is the outcome of verifying a challenge. Score is the raw sum of
+// passed-objective points (computed here, cluster-only); HintPenalty is layered
+// by the engine from session state, and NetScore is what the player earns.
 type Scorecard struct {
-	Objectives []ObjectiveResult
-	Score      int
-	MaxScore   int
-	AllPassed  bool
+	Objectives  []ObjectiveResult
+	Score       int // raw objective points earned
+	MaxScore    int
+	HintPenalty int // sum of revealed-hint penalties (set by the engine)
+	AllPassed   bool
+}
+
+// NetScore is the awarded score: objective points minus hint penalties,
+// floored at 0. AllPassed is about objectives and is independent of penalties.
+func (c Scorecard) NetScore() int {
+	n := c.Score - c.HintPenalty
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 // Evaluate runs every objective's checks against the cluster and computes the

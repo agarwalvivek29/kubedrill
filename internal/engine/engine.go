@@ -160,6 +160,9 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 	}
 
 	card := verify.Evaluate(ctx, &verify.Evaluator{Client: c, Dir: st.ChallengeDir}, loaded.Challenge)
+	// Layer in the session's hint penalties (kept out of the pure evaluator).
+	card.HintPenalty = hintPenalty(loaded.Challenge, st.HintsUsed)
+	net := card.NetScore()
 
 	late := st.Deadline != nil && time.Now().After(*st.Deadline)
 	// Persist the attempt; bestScore is monotone.
@@ -169,9 +172,9 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 		for _, o := range card.Objectives {
 			objs[o.ID] = o.Passed
 		}
-		s.Attempts = append(s.Attempts, api.Attempt{N: n, At: time.Now().UTC(), Score: card.Score, Late: late, Objectives: objs})
-		if !late && card.Score > s.BestScore {
-			s.BestScore = card.Score
+		s.Attempts = append(s.Attempts, api.Attempt{N: n, At: time.Now().UTC(), Score: net, Late: late, Objectives: objs})
+		if !late && net > s.BestScore {
+			s.BestScore = net
 		}
 		if card.AllPassed {
 			s.Phase = api.PhaseVerified
@@ -180,7 +183,7 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 	}); err != nil {
 		return nil, late, err
 	}
-	_ = e.Store.AppendEvent(sessionID, api.Event{Kind: "verify", Note: fmt.Sprintf("score=%d/%d late=%v", card.Score, card.MaxScore, late)})
+	_ = e.Store.AppendEvent(sessionID, api.Event{Kind: "verify", Note: fmt.Sprintf("net=%d/%d penalty=%d late=%v", net, card.MaxScore, card.HintPenalty, late)})
 	return &card, late, nil
 }
 

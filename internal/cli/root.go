@@ -29,6 +29,7 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newStartCmd())
 	root.AddCommand(newVerifyCmd())
 	root.AddCommand(newStatusCmd())
+	root.AddCommand(newHintCmd())
 	root.AddCommand(newListCmd())
 	root.AddCommand(newEnvCmd())
 	root.AddCommand(newShellCmd())

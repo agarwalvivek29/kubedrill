@@ -24,6 +24,7 @@ type State struct {
 	SchemaVersion int               `json:"schemaVersion"`
 	ID            string            `json:"id"`
 	Challenge     ChallengeRef      `json:"challenge"`
+	ChallengeDir  string            `json:"challengeDir,omitempty"`
 	Provider      string            `json:"provider"`
 	Cluster       string            `json:"cluster,omitempty"`
 	Phase         Phase             `json:"phase"`

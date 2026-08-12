@@ -1,0 +1,53 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-crashloop
+  version: "1.0.0"
+  title: "Broken Deployment: CrashLoopBackOff"
+  description: |
+    The `webshop` deployment in namespace `retail` is crashlooping.
+    Diagnose why the container won't stay up and restore the deployment
+    to 3 available replicas. Do not delete and recreate the deployment.
+  difficulty: medium
+  topics: [workloads, troubleshooting]
+  exam: [cka, ckad]
+  timeLimit: 15m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-command
+        patch:
+          target: { kind: Deployment, name: webshop, namespace: retail, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: web
+                      command: ["sh", "-c", "echo 'bad entrypoint'; exit 1"]
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 3"
+        target: { kind: Deployment, name: webshop, namespace: retail, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: deployment-available
+    title: "webshop has 3 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: webshop, namespace: retail, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 3
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n retail describe pod — look at the container's command and last state." }
+  - { id: h2, penalty: 20, text: "The container command was overridden to exit immediately. Remove it so the image's default entrypoint runs." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

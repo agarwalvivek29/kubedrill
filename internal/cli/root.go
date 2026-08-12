@@ -7,6 +7,9 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
@@ -23,16 +26,24 @@ func newRootCmd() *cobra.Command {
 	root.AddCommand(newVersionCmd())
 	root.AddCommand(newAuthorCmd())
 	root.AddCommand(newImagesCmd())
+	root.AddCommand(newListCmd())
+	root.AddCommand(newEnvCmd())
+	root.AddCommand(newShellCmd())
+	root.AddCommand(newStopCmd())
+	root.AddCommand(newPruneCmd())
 	return root
 }
 
 // Execute runs the root command and returns a process exit code.
 //
-// Exit codes are part of the CLI contract (LLD §9): 0 ok, 2 usage error.
-// Richer codes (1 objectives failing, 3 environment, 4 capability refusal,
-// 5 rule fail) are introduced by the commands that can produce them.
+// SilenceErrors/SilenceUsage are set on the root so cobra doesn't print
+// errors itself; we print them here (once, to stderr) and map to an exit code.
+// Exit codes are part of the CLI contract (LLD §9): 0 ok, 2 usage/general
+// error. Richer codes (1 objectives failing, 3 environment, 4 capability
+// refusal, 5 rule fail) are introduced by the commands that can produce them.
 func Execute() int {
 	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
 		return 2
 	}
 	return 0

@@ -1,0 +1,26 @@
+name: e2e
+# Real kind clusters (Docker-backed). Heavier than unit CI, so it runs on
+# merge to main and nightly rather than every PR (per HLD §9). Trigger
+# manually with workflow_dispatch when a PR needs an e2e check.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: e2e (build-tagged; provisions real kind clusters)
+        run: go test -tags e2e -timeout 20m ./...

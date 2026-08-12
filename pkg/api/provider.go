@@ -1,0 +1,76 @@
+package api
+
+import "context"
+
+// EnvProvider provisions and tears down the throwaway environments challenges
+// run in. kind is the v0.1 implementation; k3d/external are additive adapters
+// behind this same port (AD-1). Everything here takes a context and uses
+// JSON-serializable request/result types so an out-of-process (exec) plugin
+// protocol can implement it later without a rewrite.
+type EnvProvider interface {
+	// Name is the provider identifier, e.g. "kind".
+	Name() string
+
+	// Capabilities reports what this provider can do, so the engine can refuse
+	// to start a challenge that needs something the provider lacks (AD-5)
+	// rather than silently running it ungraded.
+	Capabilities() Capabilities
+
+	// Provision creates an environment and returns a handle. It must write the
+	// player kubeconfig only under req.SessionDir and never touch the user's
+	// ~/.kube/config (AD-9, NFR-2).
+	Provision(ctx context.Context, req EnvRequest) (Environment, error)
+
+	// Destroy tears down the environment for the given id. It is idempotent:
+	// destroying an already-gone environment is not an error.
+	Destroy(ctx context.Context, envID string) error
+
+	// List returns the environments this provider currently owns, discovered
+	// from provider-native labels (used for orphan reconciliation by `prune`).
+	List(ctx context.Context) ([]EnvInfo, error)
+
+	// LoadImages loads pre-cached image tarballs into the environment so a
+	// challenge can run offline (NFR-1).
+	LoadImages(ctx context.Context, envID string, tarPaths []string) error
+}
+
+// Capabilities is a provider's declared feature set. The engine gates
+// challenge start on these (AD-5).
+type Capabilities struct {
+	// AuditLog: the provider can surface an API-server audit event stream
+	// (required for rule grading — Epic 3).
+	AuditLog bool
+	// NodeExec: the provider can run commands on cluster nodes (required for
+	// node-level challenges — Epic 3).
+	NodeExec bool
+	// ImagePreload: the provider can load local image tarballs.
+	ImagePreload bool
+	// MultiNode: the provider can create worker nodes.
+	MultiNode bool
+}
+
+// EnvRequest is the input to Provision. It is intentionally small and
+// serializable.
+type EnvRequest struct {
+	// SessionID is the unique id the environment is named after.
+	SessionID string
+	// SessionDir is where the player kubeconfig (and provider-private files
+	// like the engine kubeconfig) are written. Never ~/.kube/config.
+	SessionDir string
+	// KubernetesVersion is the desired k8s minor (e.g. "1.31"); empty = the
+	// provider default.
+	KubernetesVersion string
+	// ControlPlane and Workers describe the node topology; 0 workers = single
+	// control-plane node.
+	ControlPlane int
+	Workers      int
+	// Labels are attached to the environment for later discovery.
+	Labels map[string]string
+}
+
+// EnvInfo is a lightweight description of a provisioned environment.
+type EnvInfo struct {
+	ID     string
+	Name   string
+	Labels map[string]string
+}

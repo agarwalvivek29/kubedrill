@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kubedrill.dev/schema/v1alpha1/challenge.schema.json",
+  "$defs": {
+    "Check": {
+      "properties": {
+        "match": {
+          "$ref": "#/$defs/MatchCheck"
+        },
+        "cel": {
+          "type": "string"
+        },
+        "probe": {
+          "$ref": "#/$defs/Probe"
+        },
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "type": "array"
+        },
+        "poll": {
+          "$ref": "#/$defs/Poll"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "targets": {
+          "$ref": "#/$defs/Targets"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Cluster": {
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "kubernetesVersion": {
+          "type": "string"
+        },
+        "nodes": {
+          "$ref": "#/$defs/Nodes"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Environment": {
+      "properties": {
+        "cluster": {
+          "$ref": "#/$defs/Cluster"
+        },
+        "images": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "setup": {
+          "$ref": "#/$defs/Setup"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "cluster",
+        "setup"
+      ]
+    },
+    "Exec": {
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "command"
+      ]
+    },
+    "Fault": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "patch": {
+          "$ref": "#/$defs/Patch"
+        },
+        "exec": {
+          "$ref": "#/$defs/Exec"
+        },
+        "nodeExec": {
+          "$ref": "#/$defs/NodeExec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "Hint": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "penalty": {
+          "type": "integer"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "penalty",
+        "text"
+      ]
+    },
+    "ManifestRef": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "MatchCheck": {
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "object": true
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "target",
+        "object"
+      ]
+    },
+    "Metadata": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "difficulty": {
+          "type": "string"
+        },
+        "topics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "exam": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timeLimit": {
+          "type": "string"
+        },
+        "nodeAccess": {
+          "type": "boolean"
+        },
+        "minEngineVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "title",
+        "difficulty"
+      ]
+    },
+    "NodeExec": {
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "node",
+        "command"
+      ]
+    },
+    "Nodes": {
+      "properties": {
+        "controlPlane": {
+          "type": "integer"
+        },
+        "workers": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "controlPlane",
+        "workers"
+      ]
+    },
+    "Objective": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "points": {
+          "type": "integer"
+        },
+        "dependsOn": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "expectInitiallyPassing": {
+          "type": "boolean"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "points",
+        "checks"
+      ]
+    },
+    "Patch": {
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/Target"
+        },
+        "type": {
+          "type": "string"
+        },
+        "data": true
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "target",
+        "type",
+        "data"
+      ]
+    },
+    "Penalty": {
+      "properties": {
+        "Fail": {
+          "type": "boolean"
+        },
+        "Points": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "Fail",
+        "Points"
+      ]
+    },
+    "Poll": {
+      "properties": {
+        "timeout": {
+          "type": "string"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Probe": {
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "image",
+        "script"
+      ]
+    },
+    "Rule": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "deny": {
+          "$ref": "#/$defs/RuleSpec"
+        },
+        "protect": {
+          "$ref": "#/$defs/RuleSpec"
+        },
+        "require": {
+          "$ref": "#/$defs/RuleSpec"
+        },
+        "penalty": {
+          "$ref": "#/$defs/Penalty"
+        },
+        "enforce": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id",
+        "penalty"
+      ]
+    },
+    "RuleMatch": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind"
+      ]
+    },
+    "RuleSpec": {
+      "properties": {
+        "operations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match": {
+          "$ref": "#/$defs/RuleMatch"
+        },
+        "fields": true,
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "match"
+      ]
+    },
+    "Setup": {
+      "properties": {
+        "manifests": {
+          "items": {
+            "$ref": "#/$defs/ManifestRef"
+          },
+          "type": "array"
+        },
+        "faults": {
+          "items": {
+            "$ref": "#/$defs/Fault"
+          },
+          "type": "array"
+        },
+        "readiness": {
+          "items": {
+            "$ref": "#/$defs/Check"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Solution": {
+      "properties": {
+        "explanation": {
+          "type": "string"
+        },
+        "script": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "script"
+      ]
+    },
+    "Target": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind"
+      ]
+    },
+    "Targets": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "labelSelector": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind"
+      ]
+    }
+  },
+  "properties": {
+    "apiVersion": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "environment": {
+      "$ref": "#/$defs/Environment"
+    },
+    "objectives": {
+      "items": {
+        "$ref": "#/$defs/Objective"
+      },
+      "type": "array"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/Rule"
+      },
+      "type": "array"
+    },
+    "hints": {
+      "items": {
+        "$ref": "#/$defs/Hint"
+      },
+      "type": "array"
+    },
+    "solution": {
+      "$ref": "#/$defs/Solution"
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "environment",
+    "objectives",
+    "solution"
+  ],
+  "title": "kubedrill Challenge (v1alpha1)"
+}

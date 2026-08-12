@@ -1,0 +1,55 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-crashloop
+  version: "1.0.0"
+  title: "Broken Deployment: CrashLoopBackOff"
+  difficulty: medium
+  topics: [workloads, troubleshooting]
+  exam: [cka, ckad]
+  timeLimit: 15m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    readiness:
+      - match:
+          target: { kind: Deployment, name: webshop, namespace: retail }
+          object:
+            status: { unavailableReplicas: 1 }
+objectives:
+  - id: deployment-available
+    title: "webshop has 3 available replicas"
+    points: 50
+    checks:
+      - match:
+          target: { kind: Deployment, name: webshop, namespace: retail }
+          object:
+            status: { availableReplicas: 3 }
+      - cel: "object.status.availableReplicas == 3"
+        target: { kind: Deployment, name: webshop, namespace: retail }
+  - id: service-serves
+    title: "service responds"
+    points: 30
+    dependsOn: [deployment-available]
+    checks:
+      - anyOf:
+          - cel: "object.status.readyReplicas == 3"
+            target: { kind: Deployment, name: webshop, namespace: retail }
+          - match:
+              target: { kind: Deployment, name: webshop, namespace: retail }
+              object:
+                status: { readyReplicas: 3 }
+rules:
+  - id: no-delete-namespace
+    deny: { operations: [DELETE], match: { kind: Namespace, name: retail } }
+    penalty: fail
+    enforce: true
+hints:
+  - { id: h1, penalty: 5, text: "kubectl describe pod — check last state." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

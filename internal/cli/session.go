@@ -64,21 +64,22 @@ func newListCmd() *cobra.Command {
 			}
 			tw := tabwriter.NewWriter(out, 0, 2, 2, ' ', 0)
 			fmt.Fprintln(tw, "SESSION\tCHALLENGE\tPHASE\tSCORE\t")
-			active := 0
+			live := 0
 			for _, st := range states {
 				marker := ""
 				if st.ID == cur {
 					marker = " *"
 				}
-				if st.Phase == api.PhaseCreating || st.Phase == api.PhaseRunning {
-					active++
+				// Every non-stopped session still owns a running cluster.
+				if st.Phase != api.PhaseStopped {
+					live++
 				}
 				fmt.Fprintf(tw, "%s%s\t%s\t%s\t%d\t\n", st.ID, marker, st.Challenge.Name, st.Phase, st.BestScore)
 			}
 			tw.Flush()
-			if active >= resourcePressureThreshold {
+			if live >= resourcePressureThreshold {
 				fmt.Fprintf(cmd.ErrOrStderr(),
-					"\nnote: %d active sessions — each uses ~2 GB RAM; starting more may strain a default Docker VM\n", active)
+					"\nnote: %d sessions have running clusters (each ~2 GB RAM); `kubedrill stop` ones you're done with\n", live)
 			}
 			return nil
 		},
@@ -164,6 +165,10 @@ func newStopCmd() *cobra.Command {
 			} else {
 				id, err := resolveSession(s, args)
 				if err != nil {
+					return err
+				}
+				// Don't claim to "stop" a session that doesn't exist.
+				if _, err := s.Load(id); err != nil {
 					return err
 				}
 				ids = []string{id}

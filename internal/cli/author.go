@@ -9,10 +9,11 @@ import (
 	"github.com/agarwalvivek29/kubedrill/internal/schema"
 )
 
-// newAuthorCmd is the parent for the authoring toolchain. `schema --print`
-// landed in Story 1.2 (it emits the frozen contract, FR-13), `new` scaffolds a
-// challenge (Story 2.1), `validate` checks one without a cluster (Story 2.2)
-// and `lint` enforces quality/safety rules (Story 2.3); `test` arrives in 2.4.
+// newAuthorCmd is the parent for the authoring toolchain: `schema --print`
+// emits the frozen contract (Story 1.2, FR-13), `new` scaffolds a challenge
+// (Story 2.1), `validate` checks one without a cluster (Story 2.2), `lint`
+// enforces quality/safety rules (Story 2.3), and `test` proves it solvable and
+// non-vacuous on a throwaway cluster (Story 2.4).
 func newAuthorCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "author",
@@ -22,6 +23,7 @@ func newAuthorCmd() *cobra.Command {
 	cmd.AddCommand(newAuthorNewCmd())
 	cmd.AddCommand(newAuthorValidateCmd())
 	cmd.AddCommand(newAuthorLintCmd())
+	cmd.AddCommand(newAuthorTestCmd())
 	return cmd
 }
 

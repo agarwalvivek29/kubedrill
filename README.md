@@ -36,6 +36,10 @@ make build
 - **The contract:** challenges are `kubedrill.dev/v1alpha1` manifests validated against a published JSON Schema.
 - Architecture decisions are recorded in [`docs/adr/`](docs/adr/).
 
+## Authoring challenges
+
+Challenges are declarative and provably correct. The `kubedrill author` toolchain scaffolds, validates, lints, and — with `author test` — proves a challenge fails when unsolved and passes when solved, on a throwaway cluster. Every content PR is gated by the same harness in CI. See [`docs/AUTHORING.md`](docs/AUTHORING.md).
+
 ## License
 
 [Apache-2.0](LICENSE).

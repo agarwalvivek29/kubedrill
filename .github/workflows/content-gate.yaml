@@ -1,0 +1,42 @@
+name: content-gate
+# Proves every challenge changed in a PR is solvable and non-vacuous on a real
+# kind cluster (Story 2.5, FR-15/FR-21). A failing challenge blocks merge.
+#
+# Fork-PR hardening (NFR-5): this job runs untrusted community solve.sh, so it
+# is deliberately built to leak nothing —
+#   - `pull_request`, never `pull_request_target`: the job runs with the fork's
+#     code but WITHOUT the base repo's secrets, and with a read-only token.
+#   - `permissions: contents: read` and no `secrets:` referenced anywhere: the
+#     harness has no credentials to exfiltrate.
+#   - action versions are pinned to full commit SHAs (a moved tag can't inject
+#     code into a job that executes untrusted scripts).
+on:
+  pull_request:
+    paths:
+      - "challenges/**"
+      - "packs/**"
+      - "hack/content-gate.sh"
+      - ".github/workflows/content-gate.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  test-changed-challenges:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: checkout (full history so we can diff against the PR base)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: build kubedrill
+        run: make build
+      - name: author test every changed challenge
+        run: ./hack/content-gate.sh "${{ github.event.pull_request.base.sha }}" ./kubedrill

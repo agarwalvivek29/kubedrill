@@ -1,0 +1,60 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-readiness-probe
+  version: "1.0.0"
+  title: "Readiness Probe Points at the Wrong Port"
+  description: |
+    The `storefront` deployment in namespace `shop` never becomes ready: all
+    3 pods are Running but 0 are Ready, so the rollout is stuck and the app
+    serves no traffic. The container listens on port 80, but something about
+    its readiness probe is wrong. Diagnose it and restore 3 ready replicas.
+    Do not delete and recreate the deployment.
+  difficulty: easy
+  topics: [observability, workloads, troubleshooting]
+  exam: [ckad]
+  timeLimit: 10m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-readiness-port
+        patch:
+          target: { kind: Deployment, name: storefront, namespace: shop, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: web
+                      readinessProbe:
+                        httpGet:
+                          path: /
+                          port: 8080
+    readiness:
+      # Broken-and-settled: the probe fails, so the deployment never reaches 3
+      # ready replicas. Gate start on that stable broken state.
+      - cel: "!has(object.status.readyReplicas) || object.status.readyReplicas < 3"
+        target: { kind: Deployment, name: storefront, namespace: shop, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: three-ready
+    title: "storefront has 3 ready replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: storefront, namespace: shop, apiVersion: apps/v1 }
+          object:
+            status:
+              readyReplicas: 3
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n shop get pods shows Running but 0/1 READY. kubectl -n shop describe pod — read the Readiness probe line and its failure events." }
+  - { id: h2, penalty: 20, text: "The container listens on port 80 but the readinessProbe httpGet is aimed at port 8080. Point the probe back at 80." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

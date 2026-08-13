@@ -1,0 +1,52 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-service-selector
+  version: "1.0.0"
+  title: "Service Selector Doesn't Match Its Pods"
+  description: |
+    In namespace `web`, the `frontend` deployment is healthy — 2 pods Running
+    and Ready — but the `frontend` Service sends traffic nowhere: it has no
+    endpoints, so `curl frontend.web` times out. The pods and the Service are
+    both fine on their own; the wiring between them is wrong. Fix it so the
+    Service has ready endpoints. Don't relabel the pods or touch the Deployment.
+  difficulty: easy
+  topics: [services, networking, troubleshooting]
+  exam: [ckad]
+  timeLimit: 10m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-service-selector
+        patch:
+          target: { kind: Service, name: frontend, namespace: web, apiVersion: v1 }
+          type: merge
+          data:
+            spec:
+              selector:
+                app: frontend-v2
+    readiness:
+      # The pods are healthy; gate start on the deployment being fully available
+      # so the environment is settled. The Service breakage is immediate.
+      - cel: "has(object.status.availableReplicas) && object.status.availableReplicas >= 2"
+        target: { kind: Deployment, name: frontend, namespace: web, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: service-has-endpoints
+    title: "the frontend Service has ready endpoints"
+    points: 100
+    checks:
+      - cel: "has(object.subsets) && object.subsets.exists(s, has(s.addresses) && size(s.addresses) > 0)"
+        target: { kind: Endpoints, name: frontend, namespace: web, apiVersion: v1 }
+        poll: { timeout: 30s }
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n web get endpoints frontend shows <none>. Compare the Service's spec.selector with the labels on the running pods (kubectl -n web get pods --show-labels)." }
+  - { id: h2, penalty: 20, text: "The Service selects app=frontend-v2, but the pods are labelled app=frontend. Point the Service selector back at app=frontend." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

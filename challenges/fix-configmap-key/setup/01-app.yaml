@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: billing
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: billing
+data:
+  DATABASE_URL: "postgres://db.billing.svc.cluster.local:5432/invoices"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: invoicer
+  namespace: billing
+  labels: { app: invoicer }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: invoicer }
+  template:
+    metadata:
+      labels: { app: invoicer }
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: DATABASE_URL

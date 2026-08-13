@@ -79,6 +79,44 @@ func Evaluate(ctx context.Context, e *Evaluator, ch *v1alpha1.Challenge) Scoreca
 	return card
 }
 
+// EvaluateDirect grades every objective's checks directly, ignoring dependsOn
+// gating (AD-11): it is the negative phase of `author test`. A vacuous objective
+// must not be able to hide behind an unmet dependency, so each objective is
+// evaluated on its own — an objective "passes" here iff all its own checks pass.
+// Checks are evaluated ONCE (no poll-retry): the negative phase is a snapshot of
+// the freshly-provisioned broken environment, and retrying an expected failure
+// would only add latency without changing the verdict.
+func EvaluateDirect(ctx context.Context, e *Evaluator, ch *v1alpha1.Challenge) Scorecard {
+	var card Scorecard
+	for _, obj := range ch.Objectives {
+		card.MaxScore += obj.Points
+		ok, errored, reason := evalObjectiveDirect(ctx, e, obj)
+		if ok {
+			card.Score += obj.Points
+		}
+		card.Objectives = append(card.Objectives, ObjectiveResult{
+			ID: obj.ID, Title: obj.Title, Points: obj.Points,
+			Passed: ok, Errored: errored, Reason: reason,
+		})
+	}
+	card.AllPassed = card.Score == card.MaxScore && card.MaxScore > 0
+	return card
+}
+
+// evalObjectiveDirect evaluates all checks (AND) exactly once, no poll-retry.
+func evalObjectiveDirect(ctx context.Context, e *Evaluator, obj v1alpha1.Objective) (bool, bool, string) {
+	for _, ch := range obj.Checks {
+		r := e.Check(ctx, ch)
+		switch r.Outcome {
+		case Errored:
+			return false, true, r.Reason
+		case Fail:
+			return false, false, r.Reason
+		}
+	}
+	return true, false, ""
+}
+
 func dependenciesMet(obj v1alpha1.Objective, passed map[string]bool) bool {
 	for _, dep := range obj.DependsOn {
 		if !passed[dep] {

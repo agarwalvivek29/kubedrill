@@ -1,0 +1,62 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-configmap-key
+  version: "1.0.0"
+  title: "Deployment Wired to the Wrong ConfigMap Key"
+  description: |
+    The `invoicer` deployment in namespace `billing` is stuck: both pods sit in
+    CreateContainerConfigError and never start. It reads a `DATABASE_URL`
+    environment variable from the `app-config` ConfigMap, but the reference is
+    wrong. Fix the wiring so both replicas run. The ConfigMap itself holds the
+    right data — do not change it, and do not hardcode the value into the pod.
+  difficulty: easy
+  topics: [configuration, workloads, troubleshooting]
+  exam: [ckad]
+  timeLimit: 10m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: point-at-missing-key
+        patch:
+          target: { kind: Deployment, name: invoicer, namespace: billing, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: app
+                      env:
+                        - name: DATABASE_URL
+                          valueFrom:
+                            configMapKeyRef:
+                              name: app-config
+                              key: DB_URL
+    readiness:
+      # The container can't resolve its env key, so it never starts: the
+      # deployment stays below 2 available replicas. Gate start on that.
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 2"
+        target: { kind: Deployment, name: invoicer, namespace: billing, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: two-available
+    title: "invoicer has 2 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: invoicer, namespace: billing, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 2
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n billing describe pod — the container is waiting on CreateContainerConfigError. Read which ConfigMap key it can't find." }
+  - { id: h2, penalty: 20, text: "The env var points at key DB_URL, but the app-config ConfigMap defines DATABASE_URL. Fix the configMapKeyRef key to DATABASE_URL." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

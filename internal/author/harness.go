@@ -249,11 +249,13 @@ func phaseFromCard(name string, card *verify.Scorecard) PhaseReport {
 	return p
 }
 
-// runSolution executes the reference solve.sh against the player kubeconfig,
-// exactly as a player would run it. Returns combined output and the exec error.
+// runSolution executes the reference solve.sh under the FR-16 contract, exactly
+// as a player would run it: on the host via bash, with cwd = the challenge
+// directory (so the script's relative paths resolve), KUBECONFIG = the player
+// kubeconfig, and the network allowed. A non-zero exit fails the harness.
 func runSolution(ctx context.Context, dir, script, kubeconfig string) (string, error) {
-	abs := filepath.Join(dir, script)
-	cmd := exec.CommandContext(ctx, "bash", abs)
+	cmd := exec.CommandContext(ctx, "bash", script)
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfig)
 	out, err := cmd.CombinedOutput()
 	return string(out), err

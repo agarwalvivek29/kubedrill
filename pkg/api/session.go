@@ -34,6 +34,10 @@ type State struct {
 	Attempts      []Attempt         `json:"attempts,omitempty"`
 	BestScore     int               `json:"bestScore"`
 	Labels        map[string]string `json:"labels,omitempty"`
+	// EnforcedPolicies are the names of the ValidatingAdmissionPolicies wired in
+	// at start for `enforce: true` rules — the tamper snapshot (AD-5). At verify,
+	// a missing policy means the player removed a live guardrail.
+	EnforcedPolicies []string `json:"enforcedPolicies,omitempty"`
 }
 
 // ChallengeRef identifies the challenge a session is playing.

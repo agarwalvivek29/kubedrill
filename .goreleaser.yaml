@@ -1,0 +1,98 @@
+# goreleaser config for kubedrill (Story 4.3, FR-19).
+# Produces darwin/linux × arm64/amd64 binaries, a Homebrew tap formula, deb/rpm
+# packages, an SBOM per archive, checksums, and a keyless cosign signature over
+# the checksums. No native Windows binary (WSL2 covers Windows).
+version: 2
+
+project_name: kubedrill
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: kubedrill
+    main: ./cmd/kubedrill
+    binary: kubedrill
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X github.com/agarwalvivek29/kubedrill/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/agarwalvivek29/kubedrill/internal/buildinfo.Commit={{ .Commit }}
+      - -X github.com/agarwalvivek29/kubedrill/internal/buildinfo.Date={{ .Date }}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+# One SBOM per archive (syft must be installed in the release job).
+sboms:
+  - artifacts: archive
+
+# Keyless cosign signature over the checksums file (covers every artifact by
+# hash). Requires cosign + OIDC (id-token: write) in the release workflow.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+    artifacts: checksum
+    output: true
+
+nfpms:
+  - id: packages
+    package_name: kubedrill
+    vendor: kubedrill
+    homepage: https://github.com/agarwalvivek29/kubedrill
+    maintainer: Vivek Agarwal <vivek.agarwal@aspora.com>
+    description: Local-first Kubernetes practice labs — a single binary that turns any machine with Docker into a Kubernetes practice lab.
+    license: Apache-2.0
+    formats: [deb, rpm]
+    # Docker is a runtime requirement but not an OS-package dependency; noted in docs.
+
+# Homebrew tap (macOS) — goreleaser's modern cask artifact. Linux users install
+# via the deb/rpm packages or the tarball.
+homebrew_casks:
+  - name: kubedrill
+    repository:
+      owner: agarwalvivek29
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/agarwalvivek29/kubedrill
+    description: Local-first Kubernetes practice labs
+    # Skip pushing until the tap repo + token exist (the workflow always sets the
+    # env var, empty when the secret is unset).
+    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_GITHUB_TOKEN "" }}true{{ else }}false{{ end }}'
+    caveats: |
+      kubedrill needs Docker running. Get started:
+        kubedrill start fix-crashloop
+
+release:
+  github:
+    owner: agarwalvivek29
+    name: kubedrill
+  draft: false
+  prerelease: auto
+  footer: |
+    ---
+    Verify the checksums signature with cosign (keyless):
+
+        cosign verify-blob \
+          --certificate checksums.txt.pem \
+          --signature checksums.txt.sig \
+          --certificate-identity-regexp 'https://github.com/agarwalvivek29/kubedrill' \
+          --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+          checksums.txt

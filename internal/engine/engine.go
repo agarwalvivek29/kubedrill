@@ -14,6 +14,7 @@ import (
 	"github.com/agarwalvivek29/kubedrill/internal/challenge"
 	"github.com/agarwalvivek29/kubedrill/internal/kube"
 	"github.com/agarwalvivek29/kubedrill/internal/provision"
+	"github.com/agarwalvivek29/kubedrill/internal/rules"
 	"github.com/agarwalvivek29/kubedrill/internal/store"
 	"github.com/agarwalvivek29/kubedrill/internal/verify"
 	"github.com/agarwalvivek29/kubedrill/pkg/api"
@@ -86,6 +87,10 @@ func (e *Engine) Start(ctx context.Context, dir, sessionID string, prog Progress
 		SessionID:         sessionID,
 		SessionDir:        e.Store.SessionDir(sessionID),
 		KubernetesVersion: ch.Environment.Cluster.KubernetesVersion,
+		// A ruled challenge gets an audit policy wired into the apiserver so its
+		// rules can be graded from what actually happened (AD-5). Unruled
+		// challenges pay no audit cost (empty policy → no wiring).
+		AuditPolicy: rules.AuditPolicy(ch),
 	})
 	if err != nil {
 		return e.failStart(ctx, sessionID, err)

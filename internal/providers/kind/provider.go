@@ -61,6 +61,16 @@ func (p *Provider) Provision(ctx context.Context, req api.EnvRequest) (api.Envir
 	name := clusterName(req.SessionID)
 	playerPath := filepath.Join(req.SessionDir, "kubeconfig")
 
+	// When the challenge has rules, the engine passes an audit policy. Write it to
+	// the session dir so kind can mount it into the control-plane node(s).
+	auditPolicyHostPath := ""
+	if req.AuditPolicy != "" {
+		auditPolicyHostPath = filepath.Join(req.SessionDir, "audit-policy.yaml")
+		if err := os.WriteFile(auditPolicyHostPath, []byte(req.AuditPolicy), 0o644); err != nil {
+			return nil, fmt.Errorf("kind: write audit policy: %w", err)
+		}
+	}
+
 	opts := []cluster.CreateOption{
 		// Write the player kubeconfig ONLY here — never merge into ~/.kube/config.
 		cluster.CreateWithKubeconfigPath(playerPath),
@@ -70,7 +80,7 @@ func (p *Provider) Provision(ctx context.Context, req api.EnvRequest) (api.Envir
 	if img := nodeImageFor(req.KubernetesVersion); img != "" {
 		opts = append(opts, cluster.CreateWithNodeImage(img))
 	}
-	if cfg := clusterConfig(req); cfg != "" {
+	if cfg := clusterConfig(req, auditPolicyHostPath); cfg != "" {
 		opts = append(opts, cluster.CreateWithRawConfig([]byte(cfg)))
 	}
 
@@ -92,6 +102,9 @@ func (p *Provider) Provision(ctx context.Context, req api.EnvRequest) (api.Envir
 		playerPath: playerPath,
 		enginePath: enginePath,
 		labels:     req.Labels,
+		prov:       p,
+		cluster:    name,
+		audit:      auditPolicyHostPath != "",
 	}, nil
 }
 

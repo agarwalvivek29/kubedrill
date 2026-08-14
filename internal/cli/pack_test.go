@@ -124,3 +124,24 @@ func TestResolveUnknownChallengeErrors(t *testing.T) {
 		t.Fatalf("expected a helpful not-found error pointing at catalog, got: %v", err)
 	}
 }
+
+func TestPackExportThenInstall(t *testing.T) {
+	withTempHome(t)
+	src := t.TempDir()
+	writePack(t, src, "shareme", "shared-demo")
+	out := filepath.Join(t.TempDir(), "shareme.tgz")
+
+	if o, err := runCLI(t, "pack", "export", src, "-o", out); err != nil {
+		t.Fatalf("pack export: %v\n%s", err, o)
+	}
+	if fi, err := os.Stat(out); err != nil || fi.Size() == 0 {
+		t.Fatalf("tarball not written: %v", err)
+	}
+	// A teammate installs the tarball and can resolve the challenge.
+	if o, err := runCLI(t, "install", out); err != nil {
+		t.Fatalf("install exported tarball: %v\n%s", err, o)
+	}
+	if _, err := resolveChallengeDir("shared-demo"); err != nil {
+		t.Fatalf("exported+installed challenge not resolvable: %v", err)
+	}
+}

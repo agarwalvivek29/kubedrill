@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: records
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ledger
+  namespace: records
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 128Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archiver
+  namespace: records
+  labels: { app: archiver }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: archiver }
+  template:
+    metadata:
+      labels: { app: archiver }
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.27-alpine
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: ledger

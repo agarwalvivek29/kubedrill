@@ -1,0 +1,55 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-volume-claim
+  version: "1.0.0"
+  title: "Deployment Points at the Wrong PVC"
+  description: |
+    The `archiver` deployment in namespace `records` won't start: its pod is
+    stuck Pending because the volume references a PersistentVolumeClaim that
+    doesn't exist. The real claim, `ledger`, is Bound and ready. Point the
+    deployment's volume back at the right claim so the pod schedules.
+  difficulty: medium
+  topics: [storage, workloads, troubleshooting]
+  exam: [cka, ckad]
+  timeLimit: 12m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: wrong-claim
+        patch:
+          target: { kind: Deployment, name: archiver, namespace: records, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  volumes:
+                    - name: data
+                      persistentVolumeClaim:
+                        claimName: ledger-old
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 1"
+        target: { kind: Deployment, name: archiver, namespace: records, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: archiver-available
+    title: "archiver has 1 available replica"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: archiver, namespace: records, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 1
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n records describe pod — the pod is Pending because its PVC 'ledger-old' is not found. kubectl -n records get pvc shows the real claim." }
+  - { id: h2, penalty: 20, text: "Patch the deployment's volume back to the existing claim: claimName ledger-old → ledger." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

@@ -1,0 +1,44 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-storageclass
+  version: "1.0.0"
+  title: "PVC Stuck Pending: Missing StorageClass"
+  description: |
+    The `loader` deployment in namespace `warehouse` is stuck: its pod is Pending
+    because the `bulk` PersistentVolumeClaim never binds. The claim asks for a
+    StorageClass that doesn't exist on this cluster. Get the pod running. Hint:
+    a PVC's storageClassName is immutable — you can't patch it.
+  difficulty: medium
+  topics: [storage, troubleshooting]
+  exam: [cka]
+  timeLimit: 12m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    readiness:
+      # The PVC references a non-existent StorageClass, so it never binds and the
+      # pod stays Pending — the environment is broken from setup (no fault needed).
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 1"
+        target: { kind: Deployment, name: loader, namespace: warehouse, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: loader-available
+    title: "loader has 1 available replica"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: loader, namespace: warehouse, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 1
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n warehouse get pvc bulk — it's Pending. kubectl get storageclass shows what actually exists (the default is 'standard'). The claim asks for 'fast-ssd'." }
+  - { id: h2, penalty: 20, text: "storageClassName is immutable, so recreate the PVC: delete pvc/bulk and re-create it with storageClassName: standard. The pending pod then binds and schedules." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

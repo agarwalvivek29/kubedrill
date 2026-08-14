@@ -1,8 +1,13 @@
 package kind
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
+
+	"github.com/agarwalvivek29/kubedrill/internal/rules"
+	"github.com/agarwalvivek29/kubedrill/pkg/api"
 )
 
 // environment is the kind-backed api.Environment. It is kubeconfig-shaped:
@@ -12,6 +17,12 @@ type environment struct {
 	playerPath string
 	enginePath string
 	labels     map[string]string
+
+	// prov and cluster let AuditEvents read the audit log off the control-plane
+	// node; audit is true only when an audit policy was wired at provision time.
+	prov    *Provider
+	cluster string
+	audit   bool
 }
 
 func (e *environment) ID() string { return e.id }
@@ -37,4 +48,36 @@ func (e *environment) Labels() map[string]string {
 		return map[string]string{}
 	}
 	return e.labels
+}
+
+// AuditEvents streams new audit-log bytes from the control-plane node starting
+// at `from` (a byte offset). It reads only from the cursor to end of file (never
+// the whole log on resume, AD-3) and trims to the last complete line so a
+// half-written final event is re-read next time rather than split. When no audit
+// policy was wired, it is a no-op.
+func (e *environment) AuditEvents(ctx context.Context, from api.AuditCursor) ([]byte, api.AuditCursor, error) {
+	if !e.audit {
+		return nil, from, nil
+	}
+	cp, err := e.prov.controlPlane(e.cluster)
+	if err != nil {
+		return nil, from, fmt.Errorf("kind: audit: %w", err)
+	}
+	// tail -c +N is 1-indexed: +1 is the whole file, +(offset+1) resumes.
+	script := fmt.Sprintf("tail -c +%d %s 2>/dev/null || true", int64(from)+1, rules.AuditLogPath)
+	var out, errb bytes.Buffer
+	cmd := cp.Command("sh", "-c", script)
+	cmd.SetStdout(&out)
+	cmd.SetStderr(&errb)
+	if err := cmd.Run(); err != nil {
+		return nil, from, fmt.Errorf("kind: read audit log: %w (%s)", err, errb.String())
+	}
+	b := out.Bytes()
+	// Trim to the last newline so we never hand back a partial final line.
+	if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
+		b = b[:i+1]
+	} else {
+		b = nil // no complete line available yet
+	}
+	return b, from + api.AuditCursor(len(b)), nil
 }

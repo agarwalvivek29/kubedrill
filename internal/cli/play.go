@@ -13,6 +13,7 @@ import (
 	"github.com/agarwalvivek29/kubedrill/challenges"
 	"github.com/agarwalvivek29/kubedrill/internal/engine"
 	"github.com/agarwalvivek29/kubedrill/internal/providers/kind"
+	"github.com/agarwalvivek29/kubedrill/internal/sources/file"
 	"github.com/agarwalvivek29/kubedrill/internal/store"
 	"github.com/agarwalvivek29/kubedrill/internal/verify"
 )
@@ -38,7 +39,19 @@ func resolveChallengeDir(arg string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return challenges.Materialize(arg, filepath.Join(home, ".kubedrill", "challenges"))
+	// Built-ins win (curated), then installed packs (Story 4.2).
+	if challenges.Has(arg) {
+		return challenges.Materialize(arg, filepath.Join(home, ".kubedrill", "challenges"))
+	}
+	if dir, _, ok := file.Resolve(filepath.Join(home, ".kubedrill", "store"), arg); ok {
+		return dir, nil
+	}
+	// Not found — produce a helpful error listing what IS available.
+	names := make([]string, 0, len(availableChallenges()))
+	for _, e := range availableChallenges() {
+		names = append(names, e.Name)
+	}
+	return "", fmt.Errorf("no challenge %q found (have: %v). See `kubedrill catalog`", arg, names)
 }
 
 func newStartCmd() *cobra.Command {

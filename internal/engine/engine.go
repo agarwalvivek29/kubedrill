@@ -61,6 +61,10 @@ func (e *Engine) Start(ctx context.Context, dir, sessionID string, prog Progress
 	if len(ch.Rules) > 0 && !e.Provider.Capabilities().AuditLog {
 		return nil, &CapabilityError{Need: "auditLog"}
 	}
+	// A challenge with nodeExec faults needs node access on the provider.
+	if challengeUsesNodeExec(ch) && !e.Provider.Capabilities().NodeExec {
+		return nil, &CapabilityError{Need: "nodeExec"}
+	}
 
 	// Record the session as "creating" BEFORE touching infra: the provider
 	// writes the kubeconfig into the session dir, so that dir + state.json
@@ -114,6 +118,12 @@ func (e *Engine) Start(ctx context.Context, dir, sessionID string, prog Progress
 	// are never blocked. The engine identity is exempt in the generated policy.
 	enforced, err := e.applyEnforcement(ctx, c, ch, prog)
 	if err != nil {
+		return e.failStart(ctx, sessionID, err)
+	}
+
+	// Apply node-level faults last, through the Environment (node/root access,
+	// AD-3) — stopping the kubelet or corrupting a static-pod manifest.
+	if err := e.applyNodeFaults(ctx, env, ch, prog); err != nil {
 		return e.failStart(ctx, sessionID, err)
 	}
 
@@ -178,6 +188,9 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 	// Layer in rule grading from the audit log (Epic 3): charged violations,
 	// their point/fail penalties, and the evidence behind them.
 	if len(loaded.Challenge.Rules) > 0 {
+		// nodeAccess challenges grant node/root, which defeats audit
+		// tamper-evidence: grade rules for information only (advisory).
+		card.Advisory = loaded.Challenge.Metadata.NodeAccess
 		e.gradeRules(ctx, sessionID, e.Store.SessionDir(sessionID), loaded.Challenge, &card)
 		// Tamper snapshot: a player who deleted a live enforcement policy fails.
 		e.checkEnforcementTamper(ctx, c, st.EnforcedPolicies, &card)

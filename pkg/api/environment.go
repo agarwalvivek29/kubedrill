@@ -41,4 +41,15 @@ type Environment interface {
 	// environment has no audit policy wired (a challenge without rules), it
 	// returns no bytes and the same cursor.
 	AuditEvents(ctx context.Context, from AuditCursor) (events []byte, next AuditCursor, err error)
+
+	// NodeExec runs a command on a named cluster node as root and returns its
+	// combined output. Node-level access powers Cluster-Architecture challenges
+	// (kubelet, static pods, etcd). Only meaningful when the provider reports the
+	// NodeExec capability. An empty node selects the control-plane node.
+	NodeExec(ctx context.Context, node string, command []string) ([]byte, error)
+
+	// NodeShellCommand returns the argv the CLI should exec for an interactive
+	// root shell on a node (the caller attaches the terminal). Returned as argv
+	// so provider specifics (e.g. `docker exec -it`) stay inside the adapter.
+	NodeShellCommand(node string) ([]string, error)
 }

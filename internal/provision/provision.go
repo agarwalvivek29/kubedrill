@@ -91,8 +91,13 @@ func applyManifest(ctx context.Context, c *kube.Client, path, challengeName stri
 // injectFault mutates a live object into its broken state. Only patch faults
 // are handled here; exec/nodeExec faults are wired in later stories.
 func injectFault(ctx context.Context, c *kube.Client, f v1alpha1.Fault) error {
+	// nodeExec faults require node/root access (AD-3), which the kube client does
+	// not have; the engine applies them through the Environment after setup.
+	if f.NodeExec != nil {
+		return nil
+	}
 	if f.Patch == nil {
-		return fmt.Errorf("only patch faults are supported in this build (fault %q)", f.Name)
+		return fmt.Errorf("only patch and nodeExec faults are supported in this build (fault %q)", f.Name)
 	}
 	t := f.Patch.Target
 	apiVersion := t.APIVersion

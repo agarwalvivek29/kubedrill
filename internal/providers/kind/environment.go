@@ -81,3 +81,32 @@ func (e *environment) AuditEvents(ctx context.Context, from api.AuditCursor) ([]
 	}
 	return b, from + api.AuditCursor(len(b)), nil
 }
+
+// NodeExec runs a command on a named node as root and returns combined output.
+func (e *environment) NodeExec(_ context.Context, node string, command []string) ([]byte, error) {
+	if len(command) == 0 {
+		return nil, fmt.Errorf("kind: node exec: empty command")
+	}
+	n, err := e.prov.findNode(e.cluster, node)
+	if err != nil {
+		return nil, fmt.Errorf("kind: node exec: %w", err)
+	}
+	var out bytes.Buffer
+	cmd := n.Command(command[0], command[1:]...)
+	cmd.SetStdout(&out)
+	cmd.SetStderr(&out)
+	if err := cmd.Run(); err != nil {
+		return out.Bytes(), fmt.Errorf("kind: node exec %v on %s: %w", command, n.String(), err)
+	}
+	return out.Bytes(), nil
+}
+
+// NodeShellCommand returns the argv for an interactive root shell on a node.
+// kind nodes are containers, so this is `docker exec -it <container> bash`.
+func (e *environment) NodeShellCommand(node string) ([]string, error) {
+	n, err := e.prov.findNode(e.cluster, node)
+	if err != nil {
+		return nil, fmt.Errorf("kind: node shell: %w", err)
+	}
+	return []string{"docker", "exec", "-it", n.String(), "bash"}, nil
+}

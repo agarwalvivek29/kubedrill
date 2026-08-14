@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/agarwalvivek29/kubedrill/internal/challenge"
 	"github.com/agarwalvivek29/kubedrill/internal/providers/kind"
 	"github.com/agarwalvivek29/kubedrill/internal/store"
 	"github.com/agarwalvivek29/kubedrill/pkg/api"
@@ -105,6 +106,51 @@ func newEnvCmd() *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "export KUBECONFIG=%s\n", s.KubeconfigPath(id))
 			return nil
+		},
+	}
+}
+
+// newNodeShellCmd opens a root shell on a cluster node for nodeAccess challenges
+// (Story 3.5, FR-18). Node/root access is deliberately gated on the challenge
+// opting in via metadata.nodeAccess.
+func newNodeShellCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "node-shell <node> [session]",
+		Short: "Open a root shell on a cluster node (nodeAccess challenges)",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			node := args[0]
+			s, err := defaultStore()
+			if err != nil {
+				return err
+			}
+			id, err := resolveSession(s, args[1:])
+			if err != nil {
+				return err
+			}
+			st, err := s.Load(id)
+			if err != nil {
+				return err
+			}
+			loaded, err := challenge.LoadDir(st.ChallengeDir)
+			if err != nil {
+				return err
+			}
+			if !loaded.Challenge.Metadata.NodeAccess {
+				return fmt.Errorf("challenge %q does not grant node access (needs metadata.nodeAccess: true)", st.Challenge.Name)
+			}
+			env, err := kind.New().Environment(cmd.Context(), id, s.SessionDir(id))
+			if err != nil {
+				return err
+			}
+			argv, err := env.NodeShellCommand(node)
+			if err != nil {
+				return err
+			}
+			sh := exec.CommandContext(cmd.Context(), argv[0], argv[1:]...)
+			sh.Stdin, sh.Stdout, sh.Stderr = os.Stdin, cmd.OutOrStdout(), cmd.ErrOrStderr()
+			fmt.Fprintf(cmd.ErrOrStderr(), "kubedrill: root shell on node %q (exit to return)\n", node)
+			return sh.Run()
 		},
 	}
 }

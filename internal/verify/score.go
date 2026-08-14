@@ -5,6 +5,7 @@ import (
 	"time"
 
 	v1alpha1 "github.com/agarwalvivek29/kubedrill/apis/challenge/v1alpha1"
+	"github.com/agarwalvivek29/kubedrill/internal/rules"
 )
 
 // defaultPollWindow is how long a failing object check (match/cel) is retried
@@ -23,20 +24,30 @@ type ObjectiveResult struct {
 }
 
 // Scorecard is the outcome of verifying a challenge. Score is the raw sum of
-// passed-objective points (computed here, cluster-only); HintPenalty is layered
-// by the engine from session state, and NetScore is what the player earns.
+// passed-objective points (computed here, cluster-only); HintPenalty, the rule
+// grading, and Failed are layered by the engine from session state and the audit
+// log. NetScore is what the player earns.
 type Scorecard struct {
 	Objectives  []ObjectiveResult
 	Score       int // raw objective points earned
 	MaxScore    int
 	HintPenalty int // sum of revealed-hint penalties (set by the engine)
 	AllPassed   bool
+
+	// Rule grading (Epic 3), layered by the engine from the audit log.
+	RuleViolations []rules.Violation // charged rule breaches, with evidence
+	RulePenalty    int               // sum of points deducted by violated rules
+	Failed         bool              // a `penalty: fail` rule (or tampering) tripped
 }
 
-// NetScore is the awarded score: objective points minus hint penalties,
-// floored at 0. AllPassed is about objectives and is independent of penalties.
+// NetScore is the awarded score: objective points minus hint and rule penalties,
+// floored at 0. A Failed challenge scores 0 outright. AllPassed remains about
+// objectives; use Failed to tell whether integrity/`fail` rules zeroed the run.
 func (c Scorecard) NetScore() int {
-	n := c.Score - c.HintPenalty
+	if c.Failed {
+		return 0
+	}
+	n := c.Score - c.HintPenalty - c.RulePenalty
 	if n < 0 {
 		return 0
 	}

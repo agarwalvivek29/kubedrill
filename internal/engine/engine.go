@@ -167,6 +167,11 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 	card := verify.Evaluate(ctx, &verify.Evaluator{Client: c, Dir: st.ChallengeDir}, loaded.Challenge)
 	// Layer in the session's hint penalties (kept out of the pure evaluator).
 	card.HintPenalty = hintPenalty(loaded.Challenge, st.HintsUsed)
+	// Layer in rule grading from the audit log (Epic 3): charged violations,
+	// their point/fail penalties, and the evidence behind them.
+	if len(loaded.Challenge.Rules) > 0 {
+		e.gradeRules(ctx, sessionID, e.Store.SessionDir(sessionID), loaded.Challenge, &card)
+	}
 	net := card.NetScore()
 
 	late := st.Deadline != nil && time.Now().After(*st.Deadline)

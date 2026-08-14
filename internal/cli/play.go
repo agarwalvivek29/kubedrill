@@ -114,8 +114,9 @@ func newVerifyCmd() *cobra.Command {
 				return err
 			}
 			printScorecard(cmd, card, late)
-			if !card.AllPassed {
-				// Exit 1: objectives still failing (scriptable).
+			if !card.AllPassed || card.Failed {
+				// Exit 1: objectives still failing, or a fail-penalty/tamper rule
+				// tripped (scriptable).
 				return errObjectivesFailing
 			}
 			return nil
@@ -141,17 +142,43 @@ func printScorecard(cmd *cobra.Command, card *verify.Scorecard, late bool) {
 		}
 		fmt.Fprintln(out, line)
 	}
-	if card.HintPenalty > 0 {
-		fmt.Fprintf(out, "\nObjectives: %d/%d   Hint penalty: −%d", card.Score, card.MaxScore, card.HintPenalty)
-		fmt.Fprintf(out, "\nScore: %d/%d", card.NetScore(), card.MaxScore)
-	} else {
-		fmt.Fprintf(out, "\nScore: %d/%d", card.NetScore(), card.MaxScore)
+	// Rule violations (Epic 3): shown with the evidence that triggered them.
+	if len(card.RuleViolations) > 0 {
+		fmt.Fprintln(out, "\nRule violations:")
+		for _, v := range card.RuleViolations {
+			penalty := fmt.Sprintf("−%d", v.Points)
+			if v.Fail {
+				penalty = "FAIL"
+			}
+			fmt.Fprintf(out, "  ✗ [%s] %s (%s)  — %s\n", v.Type, v.RuleID, penalty, v.Message)
+			for _, ev := range v.Evidence {
+				where := ev.Resource
+				if ev.Namespace != "" {
+					where += " " + ev.Namespace + "/" + ev.Name
+				} else if ev.Name != "" {
+					where += " " + ev.Name
+				}
+				fmt.Fprintf(out, "      • %s %s (as %s)\n", ev.Verb, where, ev.User)
+			}
+		}
 	}
+
+	fmt.Fprintf(out, "\nObjectives: %d/%d", card.Score, card.MaxScore)
+	if card.HintPenalty > 0 {
+		fmt.Fprintf(out, "   Hint penalty: −%d", card.HintPenalty)
+	}
+	if card.RulePenalty > 0 {
+		fmt.Fprintf(out, "   Rule penalty: −%d", card.RulePenalty)
+	}
+	fmt.Fprintf(out, "\nScore: %d/%d", card.NetScore(), card.MaxScore)
 	if late {
 		fmt.Fprint(out, "  (late — past the deadline; recorded score unaffected)")
 	}
 	fmt.Fprintln(out)
-	if card.AllPassed {
+	switch {
+	case card.Failed:
+		fmt.Fprintln(out, "Challenge failed: an integrity/fail rule was violated. 🚫")
+	case card.AllPassed:
 		fmt.Fprintln(out, "All objectives passed. 🎉")
 	}
 }

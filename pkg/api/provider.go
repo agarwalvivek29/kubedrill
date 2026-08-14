@@ -32,6 +32,12 @@ type EnvProvider interface {
 	// LoadImages loads pre-cached image tarballs into the environment so a
 	// challenge can run offline (NFR-1).
 	LoadImages(ctx context.Context, envID string, tarPaths []string) error
+
+	// Environment reconstructs a handle to an already-provisioned session's
+	// environment — used by commands that run in a later process than Provision
+	// (e.g. `verify` reading the audit stream). sessionDir is where the session's
+	// kubeconfigs and provider-private files live.
+	Environment(ctx context.Context, sessionID, sessionDir string) (Environment, error)
 }
 
 // Capabilities is a provider's declared feature set. The engine gates

@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	v1alpha1 "github.com/agarwalvivek29/kubedrill/apis/challenge/v1alpha1"
 	"github.com/agarwalvivek29/kubedrill/internal/kube"
@@ -48,8 +50,51 @@ func (e *Engine) applyEnforcement(ctx context.Context, c *kube.Client, ch *v1alp
 			applied = append(applied, o.GetName())
 		}
 	}
+	// Don't hand the player a cluster before the guardrail is live: wait for the
+	// apiserver to process each policy (observedGeneration catches up), then a
+	// brief settle for the binding to take effect. Otherwise a very fast action
+	// could slip through the activation window (grading would still catch it, but
+	// the promise of enforce is immediate blocking).
+	e.waitEnforcementActive(ctx, c, applied, prog)
 	prog("enforce: %d live admission guardrail(s) active", len(applied))
 	return applied, nil
+}
+
+// waitEnforcementActive blocks (bounded) until each policy's observedGeneration
+// has caught up to its generation, then adds a short settle for binding
+// propagation.
+func (e *Engine) waitEnforcementActive(ctx context.Context, c *kube.Client, names []string, prog Progressf) {
+	if len(names) == 0 {
+		return
+	}
+	ri, err := c.ResourceFor("admissionregistration.k8s.io/v1", "ValidatingAdmissionPolicy", "")
+	if err != nil {
+		return
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for _, name := range names {
+		for time.Now().Before(deadline) {
+			o, err := ri.Get(ctx, name, metav1.GetOptions{})
+			if err == nil {
+				gen, _, _ := unstructured.NestedInt64(o.Object, "metadata", "generation")
+				obs, found, _ := unstructured.NestedInt64(o.Object, "status", "observedGeneration")
+				if found && obs >= gen && gen > 0 {
+					break
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
+		}
+	}
+	// Binding activation lags policy processing slightly; a short settle closes
+	// the remaining window.
+	select {
+	case <-ctx.Done():
+	case <-time.After(3 * time.Second):
+	}
 }
 
 // serverMinorAtLeast reports whether the cluster's minor version is >= want,

@@ -16,6 +16,7 @@ import (
 
 //go:embed all:fix-crashloop all:fix-rbac all:pending-scheduling
 //go:embed all:fix-readiness-probe all:fix-configmap-key all:fix-service-selector
+//go:embed all:payments-hotfix all:guarded-config all:node-recon
 var content embed.FS
 
 // Has reports whether name is a built-in challenge.

@@ -1,0 +1,71 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: node-recon
+  version: "1.0.0"
+  title: "Node Recon: Investigate on the Box"
+  description: |
+    The `web` deployment in namespace `edge` is crashlooping. This is a
+    node-access challenge: you get a root shell on the cluster node
+    (`kubedrill node-shell control-plane`), where the on-call left an incident
+    note at /root/INCIDENT.txt. Read it, then restore `web` to 2 replicas.
+    Because you have node/root access — which can defeat audit tamper-evidence —
+    rules on this challenge are graded in ADVISORY mode: violations are shown
+    for learning, but they don't change your score.
+  difficulty: hard
+  topics: [cluster-architecture, troubleshooting, integrity]
+  exam: [cka]
+  timeLimit: 20m
+  nodeAccess: true
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-web
+        patch:
+          target: { kind: Deployment, name: web, namespace: edge, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: web
+                      command: ["sh", "-c", "echo 'boom'; exit 1"]
+      - name: drop-incident-note
+        nodeExec:
+          node: control-plane
+          command:
+            - sh
+            - -c
+            - "printf 'INCIDENT (on-call notes):\\nThe web container command was overridden to exit 1 during a bad deploy.\\nRestore it with: kubectl -n edge patch deployment web --type=json -p ...(remove the command)\\n' > /root/INCIDENT.txt"
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 2"
+        target: { kind: Deployment, name: web, namespace: edge, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: web-available
+    title: "web has 2 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: web, namespace: edge, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 2
+rules:
+  - id: fix-in-place
+    protect:
+      match: { kind: Deployment, name: web, namespace: edge }
+      description: "fix web in place — don't delete and recreate it"
+    penalty: fail
+hints:
+  - { id: h1, penalty: 10, text: "kubedrill node-shell control-plane, then: cat /root/INCIDENT.txt" }
+  - { id: h2, penalty: 20, text: "Remove the bad command: kubectl -n edge patch deployment web --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/template/spec/containers/0/command\"}]'" }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

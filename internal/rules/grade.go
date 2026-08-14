@@ -187,13 +187,13 @@ func evidences(events []AuditEvent) []Evidence {
 
 func targetDesc(m v1alpha1.RuleMatch) string {
 	s := m.Kind
-	if m.Namespace != "" {
-		s += " " + m.Namespace + "/"
-	} else if m.Name != "" {
-		s += " "
-	}
-	if m.Name != "" {
-		s += m.Name
+	switch {
+	case m.Namespace != "" && m.Name != "":
+		s += " " + m.Namespace + "/" + m.Name
+	case m.Namespace != "":
+		s += " in namespace " + m.Namespace
+	case m.Name != "":
+		s += " " + m.Name
 	}
 	return s
 }

@@ -1,0 +1,75 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: node-triage
+  version: "1.0.0"
+  title: "Node Triage: Read the Kubelet's Complaint"
+  description: |
+    The `web` deployment in namespace `frontline` shows 2 pods Running but 0
+    Ready, and the rollout is stuck. This is a node-access challenge: you get a
+    root shell on the node (`kubedrill node-shell control-plane`), where the
+    kubelet's triage log at /root/kubelet-triage.log records exactly why the
+    readiness checks fail. Read it, then restore the deployment to 2 ready
+    replicas. Because node/root access can defeat audit tamper-evidence, rules
+    here are graded ADVISORY — shown for learning, but they don't change your
+    score.
+  difficulty: hard
+  topics: [cluster-architecture, observability, troubleshooting]
+  exam: [cka]
+  timeLimit: 20m
+  nodeAccess: true
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-readiness-port
+        patch:
+          target: { kind: Deployment, name: web, namespace: frontline, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: web
+                      readinessProbe:
+                        httpGet:
+                          path: /
+                          port: 9999
+      - name: drop-kubelet-triage-log
+        nodeExec:
+          node: control-plane
+          command:
+            - sh
+            - -c
+            - "printf 'kubelet triage (node view):\\nReadiness probe for pod frontline/web-* failed: dial tcp 10.244.0.x:9999: connect: connection refused\\nThe container listens on :80 but the probe targets :9999.\\n' > /root/kubelet-triage.log"
+    readiness:
+      - cel: "!has(object.status.readyReplicas) || object.status.readyReplicas < 2"
+        target: { kind: Deployment, name: web, namespace: frontline, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: web-ready
+    title: "web has 2 ready replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: web, namespace: frontline, apiVersion: apps/v1 }
+          object:
+            status:
+              readyReplicas: 2
+rules:
+  - id: fix-in-place
+    protect:
+      match: { kind: Deployment, name: web, namespace: frontline }
+      description: "fix web in place — don't delete and recreate it"
+    penalty: fail
+hints:
+  - { id: h1, penalty: 10, text: "kubedrill node-shell control-plane, then: cat /root/kubelet-triage.log" }
+  - { id: h2, penalty: 20, text: "The readiness probe targets port 9999 but nginx serves on 80. Patch the probe's port back to 80." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

@@ -108,6 +108,21 @@ func (p *Provider) Provision(ctx context.Context, req api.EnvRequest) (api.Envir
 	}, nil
 }
 
+// Environment implements api.EnvProvider by reconstructing a handle to a
+// running session's cluster. Audit is considered wired iff the policy file
+// written at provision time is present in the session dir.
+func (p *Provider) Environment(_ context.Context, sessionID, sessionDir string) (api.Environment, error) {
+	_, statErr := os.Stat(filepath.Join(sessionDir, "audit-policy.yaml"))
+	return &environment{
+		id:         sessionID,
+		playerPath: filepath.Join(sessionDir, "kubeconfig"),
+		enginePath: filepath.Join(sessionDir, "engine-kubeconfig"),
+		prov:       p,
+		cluster:    clusterName(sessionID),
+		audit:      statErr == nil,
+	}, nil
+}
+
 // Destroy implements api.EnvProvider. Idempotent.
 func (p *Provider) Destroy(_ context.Context, envID string) error {
 	if err := p.kind.Delete(clusterName(envID), ""); err != nil {

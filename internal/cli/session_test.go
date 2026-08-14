@@ -32,6 +32,9 @@ func (f *fakeProvider) List(context.Context) ([]api.EnvInfo, error) {
 	return out, nil
 }
 func (f *fakeProvider) LoadImages(context.Context, string, []string) error { return nil }
+func (f *fakeProvider) Environment(context.Context, string, string) (api.Environment, error) {
+	return nil, nil
+}
 
 func TestPruneReconciliation(t *testing.T) {
 	s := store.New(t.TempDir())

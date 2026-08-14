@@ -181,6 +181,27 @@ func (p *Provider) LoadImages(_ context.Context, envID string, tarPaths []string
 	return nil
 }
 
+// findNode resolves a challenge's node reference to a cluster node. An empty ref
+// or "control-plane" selects the control-plane node; otherwise it matches a node
+// by exact container name or by suffix (e.g. "worker", "worker2").
+func (p *Provider) findNode(cluster, ref string) (nodeCommander, error) {
+	if ref == "" || ref == "control-plane" {
+		return p.controlPlane(cluster)
+	}
+	nodeList, err := p.kind.ListNodes(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("list nodes: %w", err)
+	}
+	want := cluster + "-" + ref
+	for _, n := range nodeList {
+		name := n.String()
+		if name == ref || name == want || strings.HasSuffix(name, "-"+ref) {
+			return n, nil
+		}
+	}
+	return nil, fmt.Errorf("no node %q in cluster %q", ref, cluster)
+}
+
 // controlPlane returns the control-plane node for a cluster.
 func (p *Provider) controlPlane(name string) (nodeCommander, error) {
 	nodeList, err := p.kind.ListNodes(name)

@@ -114,9 +114,9 @@ func newVerifyCmd() *cobra.Command {
 				return err
 			}
 			printScorecard(cmd, card, late)
-			if !card.AllPassed || card.Failed {
+			if !card.AllPassed || (card.Failed && !card.Advisory) {
 				// Exit 1: objectives still failing, or a fail-penalty/tamper rule
-				// tripped (scriptable).
+				// tripped (advisory rules are informational and never fail).
 				return errObjectivesFailing
 			}
 			return nil
@@ -144,7 +144,11 @@ func printScorecard(cmd *cobra.Command, card *verify.Scorecard, late bool) {
 	}
 	// Rule violations (Epic 3): shown with the evidence that triggered them.
 	if len(card.RuleViolations) > 0 {
-		fmt.Fprintln(out, "\nRule violations:")
+		heading := "\nRule violations:"
+		if card.Advisory {
+			heading = "\nRule violations (advisory — node access; informational only):"
+		}
+		fmt.Fprintln(out, heading)
 		for _, v := range card.RuleViolations {
 			penalty := fmt.Sprintf("−%d", v.Points)
 			if v.Fail {
@@ -176,7 +180,7 @@ func printScorecard(cmd *cobra.Command, card *verify.Scorecard, late bool) {
 	}
 	fmt.Fprintln(out)
 	switch {
-	case card.Failed:
+	case card.Failed && !card.Advisory:
 		fmt.Fprintln(out, "Challenge failed: an integrity/fail rule was violated. 🚫")
 	case card.AllPassed:
 		fmt.Fprintln(out, "All objectives passed. 🎉")

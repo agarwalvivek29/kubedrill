@@ -38,16 +38,25 @@ type Scorecard struct {
 	RuleViolations []rules.Violation // charged rule breaches, with evidence
 	RulePenalty    int               // sum of points deducted by violated rules
 	Failed         bool              // a `penalty: fail` rule (or tampering) tripped
+
+	// Advisory is set for nodeAccess challenges: node/root access defeats audit
+	// tamper-evidence, so rule violations are reported for information but do NOT
+	// affect the score or fail the run (AD-5, FR-18).
+	Advisory bool
 }
 
 // NetScore is the awarded score: objective points minus hint and rule penalties,
-// floored at 0. A Failed challenge scores 0 outright. AllPassed remains about
-// objectives; use Failed to tell whether integrity/`fail` rules zeroed the run.
+// floored at 0. A Failed challenge scores 0 outright — unless grading is
+// Advisory (node access), where rule outcomes are informational and never touch
+// the score. AllPassed remains about objectives.
 func (c Scorecard) NetScore() int {
-	if c.Failed {
+	if c.Failed && !c.Advisory {
 		return 0
 	}
-	n := c.Score - c.HintPenalty - c.RulePenalty
+	n := c.Score - c.HintPenalty
+	if !c.Advisory {
+		n -= c.RulePenalty
+	}
 	if n < 0 {
 		return 0
 	}

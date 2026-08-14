@@ -110,6 +110,13 @@ func (e *Engine) Start(ctx context.Context, dir, sessionID string, prog Progress
 		return e.failStart(ctx, sessionID, err)
 	}
 
+	// Wire live enforcement (enforce: true rules) AFTER setup, so setup/faults
+	// are never blocked. The engine identity is exempt in the generated policy.
+	enforced, err := e.applyEnforcement(ctx, c, ch, prog)
+	if err != nil {
+		return e.failStart(ctx, sessionID, err)
+	}
+
 	// Broken as intended: arm the timer.
 	if err := e.Store.Update(sessionID, func(s *api.State) error {
 		s.Phase = api.PhaseRunning
@@ -117,6 +124,7 @@ func (e *Engine) Start(ctx context.Context, dir, sessionID string, prog Progress
 			d := time.Now().Add(*durationOrZero(ch.Metadata.TimeLimit))
 			s.Deadline = &d
 		}
+		s.EnforcedPolicies = enforced
 		return nil
 	}); err != nil {
 		return nil, err
@@ -171,6 +179,8 @@ func (e *Engine) Verify(ctx context.Context, sessionID string) (*verify.Scorecar
 	// their point/fail penalties, and the evidence behind them.
 	if len(loaded.Challenge.Rules) > 0 {
 		e.gradeRules(ctx, sessionID, e.Store.SessionDir(sessionID), loaded.Challenge, &card)
+		// Tamper snapshot: a player who deleted a live enforcement policy fails.
+		e.checkEnforcementTamper(ctx, c, st.EnforcedPolicies, &card)
 	}
 	net := card.NetScore()
 

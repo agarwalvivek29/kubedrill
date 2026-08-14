@@ -57,43 +57,50 @@ func Attribute(e AuditEvent) Charge {
 		return ChargePlayer
 	}
 
-	switch {
-	case e.User.Username == EngineIdentity:
+	if isExempt(e.User.Username) {
 		return ChargeExempt
-	case isPinnedController(e.User.Username):
-		return ChargeExempt
-	default:
-		return ChargePlayer
+	}
+	return ChargePlayer
+}
+
+// The AD-4 exempt set — the ONLY identities grading and live enforcement ignore.
+// It is deliberately narrow and shared by BOTH paths (grading via isExempt,
+// enforcement via the generated VAP matchConditions in enforce.go) so the two
+// are one definition (AD-5): it never matches `system:*` wholesale, and in
+// particular never a non-kube-system ServiceAccount (so a player-created SA
+// stays chargeable and blockable). The exact usernames were confirmed against
+// real kind audit output.
+func exemptUsernames() []string {
+	return []string{
+		EngineIdentity,
+		"system:apiserver",
+		"system:kube-controller-manager",
+		"system:kube-scheduler",
+		"system:kube-proxy",
 	}
 }
 
-// isPinnedController reports whether a username is a pinned control-plane
-// identity that grading exempts. The set is fixed and narrow (AD-4); it never
-// matches `system:*` wholesale, and in particular never matches a non-kube-system
-// ServiceAccount (which is how a player-created SA stays chargeable).
-//
-// The exact usernames were confirmed against real kind audit output: the core
-// components act as `system:apiserver` / `system:kube-controller-manager` /
-// `system:kube-scheduler` / `system:kube-proxy`, the kubelet as
-// `system:node:<node>`, and the built-in controllers as
-// `system:serviceaccount:kube-system:<controller>`.
-func isPinnedController(username string) bool {
-	switch username {
-	case "system:apiserver",
-		"system:kube-controller-manager",
-		"system:kube-scheduler",
-		"system:kube-proxy":
-		return true
+// exemptPrefixes are username prefixes that are exempt: the kubelet(s)
+// (`system:node:<node>`) and the built-in controllers, which run as kube-system
+// ServiceAccounts (`system:serviceaccount:kube-system:<controller>`).
+func exemptPrefixes() []string {
+	return []string{
+		"system:node:",
+		"system:serviceaccount:kube-system:",
 	}
-	// The kubelet(s): system:node:<node-name>.
-	if strings.HasPrefix(username, "system:node:") {
-		return true
+}
+
+// isExempt reports whether a username is in the AD-4 exempt set.
+func isExempt(username string) bool {
+	for _, u := range exemptUsernames() {
+		if username == u {
+			return true
+		}
 	}
-	// Built-in controllers run as kube-system ServiceAccounts. Crucially this is
-	// scoped to kube-system: a ServiceAccount in any other namespace (i.e. one a
-	// player could create) is NOT exempt.
-	if strings.HasPrefix(username, "system:serviceaccount:kube-system:") {
-		return true
+	for _, p := range exemptPrefixes() {
+		if strings.HasPrefix(username, p) {
+			return true
+		}
 	}
 	return false
 }

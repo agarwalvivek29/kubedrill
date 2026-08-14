@@ -1,0 +1,66 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: payments-hotfix
+  version: "1.0.0"
+  title: "Hotfix Payments — No Shortcuts"
+  description: |
+    The `payments` deployment in namespace `prod` is crashlooping after a bad
+    rollout. Restore it to 3 available replicas. This is production, so the
+    rules of engagement are graded exam-style: fix the deployment IN PLACE
+    (don't delete and recreate it), and keep your hands off the cluster's
+    system workloads. You won't be blocked, but shortcuts cost you.
+  difficulty: medium
+  topics: [workloads, troubleshooting, integrity]
+  exam: [cka, ckad]
+  timeLimit: 15m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: bad-rollout
+        patch:
+          target: { kind: Deployment, name: payments, namespace: prod, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: web
+                      command: ["sh", "-c", "echo 'bad build'; exit 1"]
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 3"
+        target: { kind: Deployment, name: payments, namespace: prod, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: payments-available
+    title: "payments has 3 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: payments, namespace: prod, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 3
+rules:
+  - id: fix-in-place
+    protect:
+      match: { kind: Deployment, name: payments, namespace: prod }
+      description: "fix payments in place — deleting and recreating it is not allowed"
+    penalty: fail
+  - id: hands-off-system
+    deny:
+      match: { kind: Deployment, namespace: kube-system }
+      description: "do not modify the cluster's system workloads"
+    penalty: { points: 25 }
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n prod describe pod — the container command was overridden to exit immediately. Remove it so the image's entrypoint runs." }
+  - { id: h2, penalty: 20, text: "Patch the deployment in place: kubectl -n prod patch deployment payments --type=json -p '[{\"op\":\"remove\",\"path\":\"/spec/template/spec/containers/0/command\"}]'. Do NOT delete the deployment." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

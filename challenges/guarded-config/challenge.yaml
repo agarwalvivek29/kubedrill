@@ -1,0 +1,67 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: guarded-config
+  version: "1.0.0"
+  title: "Guarded Config: Fix the Wiring, Not the Data"
+  description: |
+    The `reporting` deployment in namespace `analytics` is stuck in
+    CreateContainerConfigError: it reads a `DATABASE_URL` env var from the
+    `warehouse` ConfigMap, but the reference is wrong. Fix the wiring so both
+    replicas run. The ConfigMap holds the correct data and is PROTECTED — a
+    live guardrail will block you from deleting it. Fix the reference instead.
+  difficulty: medium
+  topics: [configuration, troubleshooting, integrity]
+  exam: [ckad]
+  timeLimit: 12m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: wrong-key
+        patch:
+          target: { kind: Deployment, name: reporting, namespace: analytics, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  containers:
+                    - name: app
+                      env:
+                        - name: DATABASE_URL
+                          valueFrom:
+                            configMapKeyRef:
+                              name: warehouse
+                              key: DB_URL
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 2"
+        target: { kind: Deployment, name: reporting, namespace: analytics, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: reporting-available
+    title: "reporting has 2 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: reporting, namespace: analytics, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 2
+rules:
+  - id: protect-warehouse-config
+    protect:
+      match: { kind: ConfigMap, name: warehouse, namespace: analytics }
+      description: "the warehouse ConfigMap is protected — deleting it is blocked"
+    penalty: fail
+    enforce: true
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n analytics describe pod — the container waits on CreateContainerConfigError. Read which ConfigMap key it can't find." }
+  - { id: h2, penalty: 20, text: "The env var references key DB_URL, but the warehouse ConfigMap defines DATABASE_URL. Fix the configMapKeyRef key. Don't delete the ConfigMap — you can't, it's enforced." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

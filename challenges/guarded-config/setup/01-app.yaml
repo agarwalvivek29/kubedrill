@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: analytics
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: warehouse
+  namespace: analytics
+data:
+  DATABASE_URL: "postgres://warehouse.analytics.svc.cluster.local:5432/reports"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting
+  namespace: analytics
+  labels: { app: reporting }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: reporting }
+  template:
+    metadata:
+      labels: { app: reporting }
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: warehouse
+                  key: DATABASE_URL

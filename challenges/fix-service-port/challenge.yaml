@@ -1,0 +1,54 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-service-port
+  version: "1.0.0"
+  title: "Service Forwards to the Wrong Port"
+  description: |
+    In namespace `shop`, the `catalog` deployment is healthy — 2 pods Running and
+    Ready — but `curl catalog.shop` times out. The Service has endpoints, yet no
+    traffic gets through. The pods listen on port 80; something about the
+    Service's port mapping is wrong. Fix it so the Service serves HTTP.
+  difficulty: medium
+  topics: [services, networking, troubleshooting]
+  exam: [cka, ckad]
+  timeLimit: 12m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine, busybox:1.36]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: wrong-target-port
+        patch:
+          target: { kind: Service, name: catalog, namespace: shop, apiVersion: v1 }
+          type: merge
+          data:
+            spec:
+              ports:
+                - port: 80
+                  targetPort: 8080
+    readiness:
+      # The pods are healthy; gate on the deployment being available so the env
+      # is settled. The Service breakage (wrong targetPort) is immediate.
+      - cel: "has(object.status.availableReplicas) && object.status.availableReplicas >= 2"
+        target: { kind: Deployment, name: catalog, namespace: shop, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: catalog-serves
+    title: "the catalog Service serves HTTP"
+    points: 100
+    checks:
+      - probe:
+          image: busybox:1.36
+          script: probes/http-check.sh
+          namespace: shop
+          timeout: 30s
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n shop get endpoints catalog shows pod IPs, so the selector is fine. Compare the Service's targetPort with the container's containerPort (80)." }
+  - { id: h2, penalty: 20, text: "The Service forwards port 80 to targetPort 8080, but nginx listens on 80. Set targetPort back to 80." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

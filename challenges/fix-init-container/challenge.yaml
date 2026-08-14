@@ -1,0 +1,55 @@
+apiVersion: kubedrill.dev/v1alpha1
+kind: Challenge
+metadata:
+  name: fix-init-container
+  version: "1.0.0"
+  title: "Stuck in Init: A Failing Init Container"
+  description: |
+    The `builder` deployment in namespace `pipeline` never starts serving: its
+    pods are stuck in Init:CrashLoopBackOff. An init container that's supposed to
+    prepare the workspace exits with an error, so the main container never runs.
+    Diagnose the init container and get the deployment to 2 available replicas.
+  difficulty: medium
+  topics: [workloads, troubleshooting]
+  exam: [ckad, cka]
+  timeLimit: 12m
+environment:
+  cluster:
+    kubernetesVersion: "1.31"
+  images: [nginx:1.27-alpine, busybox:1.36]
+  setup:
+    manifests:
+      - path: setup/01-app.yaml
+    faults:
+      - name: break-init
+        patch:
+          target: { kind: Deployment, name: builder, namespace: pipeline, apiVersion: apps/v1 }
+          type: merge
+          data:
+            spec:
+              template:
+                spec:
+                  initContainers:
+                    - name: prepare
+                      image: busybox:1.36
+                      command: ["sh", "-c", "echo 'workspace missing'; exit 1"]
+    readiness:
+      - cel: "!has(object.status.availableReplicas) || object.status.availableReplicas < 2"
+        target: { kind: Deployment, name: builder, namespace: pipeline, apiVersion: apps/v1 }
+        poll: { timeout: 90s }
+objectives:
+  - id: builder-available
+    title: "builder has 2 available replicas"
+    points: 100
+    checks:
+      - match:
+          target: { kind: Deployment, name: builder, namespace: pipeline, apiVersion: apps/v1 }
+          object:
+            status:
+              availableReplicas: 2
+hints:
+  - { id: h1, penalty: 10, text: "kubectl -n pipeline get pods shows Init:CrashLoopBackOff. kubectl -n pipeline logs <pod> -c prepare shows the init container exiting 1." }
+  - { id: h2, penalty: 20, text: "The init container's command was changed to exit 1. Restore it to succeed (e.g. command: [\"sh\",\"-c\",\"echo prepared\"])." }
+solution:
+  explanation: solution/SOLUTION.md
+  script: solution/solve.sh

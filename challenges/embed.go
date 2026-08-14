@@ -18,6 +18,7 @@ import (
 //go:embed all:fix-readiness-probe all:fix-configmap-key all:fix-service-selector
 //go:embed all:payments-hotfix all:guarded-config all:node-recon
 //go:embed all:fix-volume-claim all:fix-storageclass
+//go:embed all:fix-service-port all:fix-init-container all:node-triage
 var content embed.FS
 
 // Has reports whether name is a built-in challenge.

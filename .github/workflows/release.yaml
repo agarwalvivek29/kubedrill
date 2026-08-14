@@ -1,0 +1,40 @@
+name: release
+# Cut a signed, verifiable release on a version tag (Story 4.3, FR-19).
+# goreleaser builds darwin/linux × arm64/amd64 binaries, deb/rpm packages, a
+# Homebrew formula, an SBOM per archive, checksums, and a KEYLESS cosign
+# signature over the checksums (OIDC via id-token, no signing secret to manage).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub release + upload assets
+  id-token: write # keyless cosign signing (Fulcio/Rekor via GitHub OIDC)
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout (full history for changelog)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: install cosign
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+      - name: install syft (SBOM)
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+      - name: run goreleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Empty until the tap repo + PAT secret exist; the brew push then
+          # self-skips (see .goreleaser.yaml brews.skip_upload).
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

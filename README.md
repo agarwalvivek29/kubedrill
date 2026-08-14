@@ -16,17 +16,22 @@ Hands-on Kubernetes practice — the kind that prepares you for the CKA/CKAD/CKS
 ## Quick start
 
 ```sh
-# once released:
+# once released (Homebrew, or download a signed binary / deb / rpm from Releases):
 brew install agarwalvivek29/tap/kubedrill
 kubedrill start fix-crashloop     # provisions a broken cluster + prints objectives
 # ...fix it with your own kubectl...
 kubedrill verify                  # scorecard
 ```
 
+Every release ships `darwin`/`linux` × `arm64`/`amd64` binaries, `deb`/`rpm`
+packages, an SBOM, and a keyless **cosign** signature over the checksums — see
+[`docs/RELEASING.md`](docs/RELEASING.md) to verify a download.
+
 Building from source:
 
 ```sh
 make build
+./kubedrill catalog               # available challenges (built-ins + installed packs)
 ./kubedrill version
 ```
 
